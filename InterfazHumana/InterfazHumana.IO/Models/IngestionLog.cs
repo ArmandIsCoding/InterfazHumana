@@ -4,7 +4,7 @@ public sealed record IngestionLog(
     int Id,
     int SourceSiteId,
     string TargetUrl,
-    string ContentHash,
+    int LinksDvPage,
     string Status,
     string? ErrorMessage,
     DateTime LastScrapedAt

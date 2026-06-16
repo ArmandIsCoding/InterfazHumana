@@ -49,9 +49,26 @@ public sealed class IngestionEngine
         Console.WriteLine($"[{sourceSite.Name}] Nuevos enlaces externos en Pending: {stats.NewPending}");
         Console.WriteLine($"[{sourceSite.Name}] Enlaces omitidos por incrementalidad: {stats.Skipped}");
 
-        var deepDownloadStats = await ProcessPendingBatchAsync(sourceSite.Id, _batchSize);
-        Console.WriteLine($"[{sourceSite.Name}] HTMLs externos guardados: {deepDownloadStats.Downloaded}");
-        Console.WriteLine($"[{sourceSite.Name}] Fallidos en descarga profunda: {deepDownloadStats.Failed}");
+        var totalDownloaded = 0;
+        var totalFailed = 0;
+        var totalAttempted = 0;
+
+        while (true)
+        {
+            var batchResult = await ProcessPendingBatchAsync(sourceSite.Id, _batchSize);
+            if (batchResult.Attempted == 0)
+            {
+                break;
+            }
+
+            totalAttempted += batchResult.Attempted;
+            totalDownloaded += batchResult.Downloaded;
+            totalFailed += batchResult.Failed;
+        }
+
+        Console.WriteLine($"[{sourceSite.Name}] Descarga profunda intentada: {totalAttempted}");
+        Console.WriteLine($"[{sourceSite.Name}] HTMLs externos guardados: {totalDownloaded}");
+        Console.WriteLine($"[{sourceSite.Name}] Fallidos en descarga profunda: {totalFailed}");
     }
 
     private async Task<(int CardsProcessed, int NewPending, int Skipped)> DiscoverFromLinksDvAsync(
@@ -116,7 +133,7 @@ public sealed class IngestionEngine
         return (cardsProcessed, newPending, skipped);
     }
 
-    private async Task<(int Downloaded, int Failed)> ProcessPendingBatchAsync(int sourceSiteId, int batchSize)
+    private async Task<(int Attempted, int Downloaded, int Failed)> ProcessPendingBatchAsync(int sourceSiteId, int batchSize)
     {
         var pendingLogs = _ingestionLogRepository.GetPendingBatch(sourceSiteId, batchSize);
         Console.WriteLine($"Pendientes a procesar (lote): {pendingLogs.Count}");
@@ -154,7 +171,7 @@ public sealed class IngestionEngine
             }
         }
 
-        return (downloaded, failed);
+        return (pendingLogs.Count, downloaded, failed);
     }
 }
 

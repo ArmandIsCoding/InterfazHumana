@@ -88,12 +88,12 @@ public sealed class LinksDvScraper : IBlogScraper
                 continue;
             }
 
-            var cardTextNode = cardBody.SelectSingleNode(".//p[contains(@class,'card-text')]");
-            var description = NormalizeWhitespace(HtmlEntity.DeEntitize(cardTextNode?.InnerText ?? string.Empty));
-            if (description.StartsWith(title, StringComparison.OrdinalIgnoreCase))
-            {
-                description = description[title.Length..].Trim();
-            }
+            // HtmlAgilityPack auto-cierra <p> antes de <h5> (HTML inválido en el sitio),
+            // por lo que la descripción queda como nodo de texto directo hijo de card-body.
+            var description = cardBody.ChildNodes
+                .Where(n => n.NodeType == HtmlAgilityPack.HtmlNodeType.Text)
+                .Select(n => NormalizeWhitespace(HtmlEntity.DeEntitize(n.InnerText)))
+                .FirstOrDefault(t => !string.IsNullOrWhiteSpace(t)) ?? string.Empty;
 
             var imageNode = card.SelectSingleNode(".//img[contains(@class,'card-img-top')]");
             var imageSrc = imageNode?.GetAttributeValue("src", string.Empty);

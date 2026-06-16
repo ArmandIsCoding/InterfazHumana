@@ -105,6 +105,19 @@ public sealed class IngestionEngine
             {
                 if (_ingestionLogRepository.ExistsByUrl(discovered.TargetUrl))
                 {
+                    var existingLog = _ingestionLogRepository.GetByUrl(discovered.TargetUrl);
+                    if (existingLog is not null && !_rawContentRepository.ExistsByIngestionLogId(existingLog.Id))
+                    {
+                        _rawContentRepository.AddMetadata(new RawContent(
+                            Id: 0,
+                            IngestionLogId: existingLog.Id,
+                            RawHtml: null,
+                            CleanedText: null,
+                            ExtractedTitle: discovered.Title,
+                            ExtractedDescription: discovered.Description,
+                            ExtractedImageUrl: discovered.ImageUrl));
+                    }
+
                     skipped++;
                     continue;
                 }
@@ -122,6 +135,7 @@ public sealed class IngestionEngine
                     Id: 0,
                     IngestionLogId: (int)logId,
                     RawHtml: null,
+                    CleanedText: null,
                     ExtractedTitle: discovered.Title,
                     ExtractedDescription: discovered.Description,
                     ExtractedImageUrl: discovered.ImageUrl));
@@ -149,7 +163,11 @@ public sealed class IngestionEngine
                 response.EnsureSuccessStatusCode();
                 var rawHtml = await response.Content.ReadAsStringAsync();
 
-                _rawContentRepository.UpdateRawHtmlByIngestionLogId(pendingLog.Id, rawHtml);
+                var updated = _rawContentRepository.UpdateRawHtmlByIngestionLogId(pendingLog.Id, rawHtml);
+                if (!updated)
+                {
+                    throw new InvalidOperationException("No se pudo actualizar RawHtml para el IngestionLog procesado.");
+                }
 
                 _ingestionLogRepository.UpdateStatus(
                     pendingLog.Id,

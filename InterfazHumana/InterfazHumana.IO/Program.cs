@@ -19,6 +19,7 @@ internal static class Program
         var sourceSiteRepository = new SourceSiteRepository(dbContext);
         var ingestionLogRepository = new IngestionLogRepository(dbContext);
         var rawContentRepository = new RawContentRepository(dbContext);
+        var processedPostRepository = new ProcessedPostRepository(dbContext);
 
         var dbPath = Path.GetFullPath("interfazhumana.db");
         Console.WriteLine($"SQLite inicializado correctamente. Archivo: {dbPath}");
@@ -68,5 +69,18 @@ internal static class Program
 
         Console.WriteLine($"Iniciando ingesta para SourceSite Id={linksDvSite.Id} ({linksDvSite.Name})...");
         await ingestionEngine.StartIngestionAsync(linksDvSite.Id, settings.Ingestion.DiscoveryPages);
+
+        var contentProcessor = new ContentProcessor(
+            ingestionLogRepository,
+            rawContentRepository,
+            processedPostRepository,
+            httpClient,
+            settings.Processing.BatchSize,
+            settings.Processing.LocalAi.Endpoint,
+            settings.Processing.LocalAi.Model,
+            settings.Processing.LocalAi.SystemPrompt);
+
+        Console.WriteLine("Iniciando procesamiento de contenido descargado...");
+        await contentProcessor.ProcessDownloadedContentAsync();
     }
 }

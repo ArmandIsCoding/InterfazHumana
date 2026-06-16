@@ -15,10 +15,17 @@ Infraestructura inicial para SQLite embebido y motor de ingesta web con ADO.NET 
   - guardar pendientes sin duplicar;
   - descargar lote de pendientes;
   - guardar contenido crudo y actualizar estado de ingesta.
+- Extraccion de texto legible desde HTML crudo (`Services/TextExtractor.cs`).
+- Procesamiento de contenido descargado + puente IA local (`Services/ContentProcessor.cs`):
+  - limpia HTML y guarda `CleanedText`;
+  - llama endpoint local tipo OpenAI-compatible;
+  - inserta `ProcessedPosts` y marca logs como `Processed`.
 - Configuracion por archivo `appsettings.json` para controlar:
   - `Ingestion.DiscoveryPages` (cantidad de paginas de LinksDV a escanear por corrida);
   - `Ingestion.BatchSize` (tamano del lote de pendientes);
-  - `Scrapers.LinksDv.MaxPages` (paginas maximas a recorrer en discovery).
+  - `Scrapers.LinksDv.MaxPages` (paginas maximas a recorrer en discovery);
+  - `Processing.BatchSize` (tamano de lote para logs `Downloaded`);
+  - `Processing.LocalAi.Endpoint`, `Processing.LocalAi.Model`, `Processing.LocalAi.SystemPrompt`.
 
 ## Ejecutar
 

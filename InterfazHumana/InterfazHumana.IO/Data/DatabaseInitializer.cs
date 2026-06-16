@@ -31,7 +31,7 @@ public static class DatabaseInitializer
 				SourceSiteId INTEGER NOT NULL,
 				TargetUrl TEXT NOT NULL,
 				LinksDvPage INTEGER NOT NULL DEFAULT 0,
-				Status TEXT NOT NULL CHECK (Status IN ('Pending', 'Downloaded', 'Failed')),
+				Status TEXT NOT NULL CHECK (Status IN ('Pending', 'Downloaded', 'Processed', 'Failed')),
 				ErrorMessage TEXT NULL,
 				LastScrapedAt TEXT NOT NULL,
 				FOREIGN KEY (SourceSiteId) REFERENCES SourceSites(Id) ON DELETE CASCADE
@@ -42,6 +42,7 @@ public static class DatabaseInitializer
 				Id INTEGER PRIMARY KEY AUTOINCREMENT,
 				IngestionLogId INTEGER NOT NULL,
 				RawHtml TEXT NULL,
+				CleanedText TEXT NULL,
 				ExtractedTitle TEXT NOT NULL,
 				ExtractedDescription TEXT NOT NULL,
 				ExtractedImageUrl TEXT NULL,
@@ -107,8 +108,16 @@ public static class DatabaseInitializer
 			return;
 		}
 
+		using var sqlCommand = connection.CreateCommand();
+		sqlCommand.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='IngestionLogs';";
+		sqlCommand.Prepare();
+		var ingestionLogsSql = sqlCommand.ExecuteScalar() as string;
+		var hasProcessedStatus = !string.IsNullOrWhiteSpace(ingestionLogsSql)
+			&& ingestionLogsSql.Contains("'Processed'", StringComparison.Ordinal);
+
 		if (columns.Contains("LinksDvPage", StringComparer.OrdinalIgnoreCase)
-			&& !columns.Contains("ContentHash", StringComparer.OrdinalIgnoreCase))
+			&& !columns.Contains("ContentHash", StringComparer.OrdinalIgnoreCase)
+			&& hasProcessedStatus)
 		{
 			return;
 		}
@@ -124,7 +133,7 @@ public static class DatabaseInitializer
 				SourceSiteId INTEGER NOT NULL,
 				TargetUrl TEXT NOT NULL,
 				LinksDvPage INTEGER NOT NULL DEFAULT 0,
-				Status TEXT NOT NULL CHECK (Status IN ('Pending', 'Downloaded', 'Failed')),
+				Status TEXT NOT NULL CHECK (Status IN ('Pending', 'Downloaded', 'Processed', 'Failed')),
 				ErrorMessage TEXT NULL,
 				LastScrapedAt TEXT NOT NULL,
 				FOREIGN KEY (SourceSiteId) REFERENCES SourceSites(Id) ON DELETE CASCADE
@@ -136,7 +145,7 @@ public static class DatabaseInitializer
 			       SourceSiteId,
 			       TargetUrl,
 			       {(hasLinksDvPage ? "COALESCE(LinksDvPage, 0)" : "0")},
-			       CASE WHEN Status IN ('Pending', 'Downloaded', 'Failed') THEN Status ELSE 'Pending' END,
+			       CASE WHEN Status IN ('Pending', 'Downloaded', 'Processed', 'Failed') THEN Status ELSE 'Pending' END,
 			       ErrorMessage,
 			       {(hasLastScrapedAt ? "LastScrapedAt" : "strftime('%Y-%m-%dT%H:%M:%fZ','now')")}
 			FROM IngestionLogs;
@@ -161,12 +170,13 @@ public static class DatabaseInitializer
 		if (columns.Contains("ExtractedTitle", StringComparer.OrdinalIgnoreCase)
 			&& columns.Contains("ExtractedDescription", StringComparer.OrdinalIgnoreCase)
 			&& columns.Contains("ExtractedImageUrl", StringComparer.OrdinalIgnoreCase)
-			&& !columns.Contains("CleanedText", StringComparer.OrdinalIgnoreCase))
+			&& columns.Contains("CleanedText", StringComparer.OrdinalIgnoreCase))
 		{
 			return;
 		}
 
 		var hasRawHtml = columns.Contains("RawHtml", StringComparer.OrdinalIgnoreCase);
+		var hasCleanedText = columns.Contains("CleanedText", StringComparer.OrdinalIgnoreCase);
 		var hasExtractedTitle = columns.Contains("ExtractedTitle", StringComparer.OrdinalIgnoreCase);
 		var hasExtractedDescription = columns.Contains("ExtractedDescription", StringComparer.OrdinalIgnoreCase);
 		var hasExtractedImageUrl = columns.Contains("ExtractedImageUrl", StringComparer.OrdinalIgnoreCase);
@@ -178,6 +188,7 @@ public static class DatabaseInitializer
 				Id INTEGER PRIMARY KEY AUTOINCREMENT,
 				IngestionLogId INTEGER NOT NULL,
 				RawHtml TEXT NULL,
+				CleanedText TEXT NULL,
 				ExtractedTitle TEXT NOT NULL,
 				ExtractedDescription TEXT NOT NULL,
 				ExtractedImageUrl TEXT NULL,
@@ -185,10 +196,11 @@ public static class DatabaseInitializer
 			);
 			""",
 			$"""
-			INSERT INTO RawContents_Tmp (Id, IngestionLogId, RawHtml, ExtractedTitle, ExtractedDescription, ExtractedImageUrl)
+			INSERT INTO RawContents_Tmp (Id, IngestionLogId, RawHtml, CleanedText, ExtractedTitle, ExtractedDescription, ExtractedImageUrl)
 			SELECT Id,
 			       IngestionLogId,
 			       {(hasRawHtml ? "RawHtml" : "NULL")},
+			       {(hasCleanedText ? "CleanedText" : "NULL")},
 			       {(hasExtractedTitle ? "COALESCE(ExtractedTitle, '')" : "''")},
 			       {(hasExtractedDescription ? "COALESCE(ExtractedDescription, '')" : "''")},
 			       {(hasExtractedImageUrl ? "ExtractedImageUrl" : "NULL")}

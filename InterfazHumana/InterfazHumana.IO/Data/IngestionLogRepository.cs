@@ -17,17 +17,9 @@ public sealed class IngestionLogRepository
     {
         using var connection = _dbContext.CreateConnection();
         using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT 1
-            FROM IngestionLogs
-            WHERE TargetUrl = $targetUrl
-            LIMIT 1;
-            """;
-
+        command.CommandText = "SELECT 1 FROM IngestionLogs WHERE TargetUrl = $targetUrl LIMIT 1;";
         command.Parameters.AddWithValue("$targetUrl", url);
         command.Prepare();
-
         return command.ExecuteScalar() is not null;
     }
 
@@ -37,10 +29,8 @@ public sealed class IngestionLogRepository
         using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO IngestionLogs
-                (SourceSiteId, TargetUrl, LinksDvPage, Status, ErrorMessage, LastScrapedAt)
-            VALUES
-                ($sourceSiteId, $targetUrl, $linksDvPage, $status, $errorMessage, $lastScrapedAt);
+            INSERT INTO IngestionLogs (SourceSiteId, TargetUrl, LinksDvPage, Status, ErrorMessage, LastScrapedAt)
+            VALUES ($sourceSiteId, $targetUrl, $linksDvPage, $status, $errorMessage, $lastScrapedAt);
             SELECT last_insert_rowid();
             """;
 
@@ -59,15 +49,20 @@ public sealed class IngestionLogRepository
     {
         using var connection = _dbContext.CreateConnection();
         using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT Id, SourceSiteId, TargetUrl, LinksDvPage, Status, ErrorMessage, LastScrapedAt
-            FROM IngestionLogs
-            WHERE Id = $id
-            LIMIT 1;
-            """;
-
+        command.CommandText = "SELECT Id, SourceSiteId, TargetUrl, LinksDvPage, Status, ErrorMessage, LastScrapedAt FROM IngestionLogs WHERE Id = $id LIMIT 1;";
         command.Parameters.AddWithValue("$id", id);
+        command.Prepare();
+
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? Map(reader) : null;
+    }
+
+    public IngestionLog? GetByUrl(string url)
+    {
+        using var connection = _dbContext.CreateConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT Id, SourceSiteId, TargetUrl, LinksDvPage, Status, ErrorMessage, LastScrapedAt FROM IngestionLogs WHERE TargetUrl = $targetUrl LIMIT 1;";
+        command.Parameters.AddWithValue("$targetUrl", url);
         command.Prepare();
 
         using var reader = command.ExecuteReader();
@@ -76,31 +71,24 @@ public sealed class IngestionLogRepository
 
     public IReadOnlyList<IngestionLog> GetPendingBatch(int sourceSiteId, int take)
     {
-        var result = new List<IngestionLog>();
+        return GetBatchByQuery(
+            "SELECT Id, SourceSiteId, TargetUrl, LinksDvPage, Status, ErrorMessage, LastScrapedAt FROM IngestionLogs WHERE SourceSiteId = $sourceSiteId AND Status = 'Pending' ORDER BY Id LIMIT $take;",
+            new[]
+            {
+                new KeyValuePair<string, object?>("$sourceSiteId", sourceSiteId),
+                new KeyValuePair<string, object?>("$take", take)
+            });
+    }
 
-        using var connection = _dbContext.CreateConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT Id, SourceSiteId, TargetUrl, LinksDvPage, Status, ErrorMessage, LastScrapedAt
-            FROM IngestionLogs
-            WHERE SourceSiteId = $sourceSiteId
-              AND Status = 'Pending'
-            ORDER BY Id
-            LIMIT $take;
-            """;
-
-        command.Parameters.AddWithValue("$sourceSiteId", sourceSiteId);
-        command.Parameters.AddWithValue("$take", take);
-        command.Prepare();
-
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            result.Add(Map(reader));
-        }
-
-        return result;
+    public IReadOnlyList<IngestionLog> GetByStatusBatch(string status, int take)
+    {
+        return GetBatchByQuery(
+            "SELECT Id, SourceSiteId, TargetUrl, LinksDvPage, Status, ErrorMessage, LastScrapedAt FROM IngestionLogs WHERE Status = $status ORDER BY Id LIMIT $take;",
+            new[]
+            {
+                new KeyValuePair<string, object?>("$status", status),
+                new KeyValuePair<string, object?>("$take", take)
+            });
     }
 
     public bool Update(IngestionLog ingestionLog)
@@ -162,6 +150,30 @@ public sealed class IngestionLogRepository
         command.Prepare();
 
         return command.ExecuteNonQuery() > 0;
+    }
+
+    private IReadOnlyList<IngestionLog> GetBatchByQuery(string query, IEnumerable<KeyValuePair<string, object?>> parameters)
+    {
+        var result = new List<IngestionLog>();
+
+        using var connection = _dbContext.CreateConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = query;
+
+        foreach (var parameter in parameters)
+        {
+            command.Parameters.AddWithValue(parameter.Key, parameter.Value ?? DBNull.Value);
+        }
+
+        command.Prepare();
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(Map(reader));
+        }
+
+        return result;
     }
 
     private static IngestionLog Map(SqliteDataReader reader)

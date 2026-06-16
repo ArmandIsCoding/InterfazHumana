@@ -13,10 +13,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Remove="Services/LinksDvScraper.broken.cs" />
-    </ItemGroup>
-
-    <ItemGroup>
       <None Update="appsettings.json">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>

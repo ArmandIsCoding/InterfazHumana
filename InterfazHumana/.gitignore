@@ -1,0 +1,21 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# User-specific files
+*.user
+*.rsuser
+*.suo
+
+# IDE settings
+.idea/
+.vs/
+
+# OS files
+.DS_Store
+
+# SQLite local databases
+*.db
+*.db-shm
+*.db-wal
+
